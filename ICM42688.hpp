@@ -278,13 +278,8 @@ class ICM42688 : public LibXR::Application {
                                  accl_raw[0], accl_raw[1], accl_raw[2]);
 
     gyro_data_ = rotation_ * Eigen::Matrix<float, 3, 1>(
-                                 gyro_raw[0], gyro_raw[1], gyro_raw[2]) +
+                                 gyro_raw[0], gyro_raw[1], gyro_raw[2]) -
                  gyro_data_key_.data_;
-
-    if (in_cali_) {
-      cali_count_++;
-      cali_sum_ += gyro_data_;
-    }
   }
 
   void OnMonitor(void) override {
@@ -310,23 +305,90 @@ class ICM42688 : public LibXR::Application {
 
   static int CommandFunc(ICM42688<HardwareContainer> *self, int argc,
                          char **argv) {
-    if (argc == 2 && strcmp(argv[1], "cali") == 0) {
-      self->cali_sum_.setZero();
-      self->cali_count_ = 0;
-      self->in_cali_ = true;
+    if (argc == 1) {
+      LibXR::STDIO::Printf("Usage:\r\n");
+      LibXR::STDIO::Printf(
+          "  show [time_ms] [interval_ms] - Print sensor data "
+          "periodically.\r\n");
+      LibXR::STDIO::Printf(
+          "  list_offset                  - Show current gyro calibration "
+          "offset.\r\n");
+      LibXR::STDIO::Printf(
+          "  cali                         - Start gyroscope calibration.\r\n");
+    } else if (argc == 2) {
+      if (strcmp(argv[1], "list_offset") == 0) {
+        LibXR::STDIO::Printf(
+            "Current calibration offset - x: %f, y: %f, z: %f\r\n",
+            self->gyro_data_key_.data_.x(), self->gyro_data_key_.data_.y(),
+            self->gyro_data_key_.data_.z());
+      } else if (strcmp(argv[1], "cali") == 0) {
+        self->gyro_data_key_.data_.x() = 0.0,
+        self->gyro_data_key_.data_.y() = 0.0,
+        self->gyro_data_key_.data_.z() = 0.0;
+        LibXR::STDIO::Printf(
+            "Starting gyroscope calibration. Please keep the device "
+            "steady.\r\n");
+        double x = 0.0, y = 0.0, z = 0.0;
+        for (int i = 0; i < 30000; i++) {
+          x += static_cast<double>(self->gyro_data_.x()) / 30000.0;
+          y += static_cast<double>(self->gyro_data_.y()) / 30000.0;
+          z += static_cast<double>(self->gyro_data_.z()) / 30000.0;
+          if (i % 1000 == 0) {
+            LibXR::STDIO::Printf("Progress: %d / 30\r", i / 1000);
+          }
+          LibXR::Thread::Sleep(1);
+        }
+        LibXR::STDIO::Printf("\r\nProgress: Done\r\n");
 
-      for (int i = 0; i < 30; ++i) {
-        LibXR::STDIO::Printf("Calibrating %d/30\r", i);
-        LibXR::Thread::Sleep(1000);
-      }
+        self->gyro_data_key_.data_.x() = static_cast<float>(x);
+        self->gyro_data_key_.data_.y() = static_cast<float>(y);
+        self->gyro_data_key_.data_.z() = static_cast<float>(z);
 
-      self->in_cali_ = false;
-      if (self->cali_count_ > 0) {
-        self->gyro_data_key_.data_ +=
-            self->cali_sum_ / static_cast<float>(self->cali_count_);
+        LibXR::STDIO::Printf("\r\nCalibration result - x: %f, y: %f, z: %f\r\n",
+                             self->gyro_data_key_.data_.x(),
+                             self->gyro_data_key_.data_.y(),
+                             self->gyro_data_key_.data_.z());
+
+        LibXR::STDIO::Printf("Analyzing calibration quality...\r\n");
+        x = y = z = 0.0;
+        for (int i = 0; i < 30000; i++) {
+          x += static_cast<double>(self->gyro_data_.x()) / 30000.0;
+          y += static_cast<double>(self->gyro_data_.y()) / 30000.0;
+          z += static_cast<double>(self->gyro_data_.z()) / 30000.0;
+          if (i % 1000 == 0) {
+            LibXR::STDIO::Printf("Progress: %d / 30\r", i / 1000);
+          }
+          LibXR::Thread::Sleep(1);
+        }
+        LibXR::STDIO::Printf("\r\nProgress: Done\r\n");
+
+        LibXR::STDIO::Printf("\r\nCalibration error - x: %f, y: %f, z: %f\r\n",
+                             x, y, z);
+
         self->gyro_data_key_.Set(self->gyro_data_key_.data_);
-        LibXR::STDIO::Printf("Calibration done. Offset saved.\r\n");
+        LibXR::STDIO::Printf("Calibration data saved.\r\n");
       }
+    } else if (argc == 4) {
+      if (strcmp(argv[1], "show") == 0) {
+        int time = std::stoi(argv[2]);
+        int delay = std::stoi(argv[3]);
+
+        delay = std::clamp(delay, 2, 1000);
+
+        while (time > 0) {
+          LibXR::STDIO::Printf(
+              "Accel: x = %+5f, y = %+5f, z = %+5f | "
+              "Gyro: x = %+5f, y = %+5f, z = %+5f | Temp: %+5f\r\n",
+              self->accl_data_.x(), self->accl_data_.y(), self->accl_data_.z(),
+              self->gyro_data_.x(), self->gyro_data_.y(), self->gyro_data_.z(),
+              self->temperature_);
+          LibXR::Thread::Sleep(delay);
+          time -= delay;
+        }
+      }
+    } else {
+      LibXR::STDIO::Printf("Error: Invalid arguments.\r\n");
+      return -1;
     }
     return 0;
   }
@@ -340,10 +402,6 @@ class ICM42688 : public LibXR::Application {
 
   uint8_t buffer_[ICM42688_READ_LEN];
   Eigen::Matrix<float, 3, 1> gyro_data_, accl_data_;
-
-  Eigen::Matrix<float, 3, 1> cali_sum_ = Eigen::Matrix<float, 3, 1>::Zero();
-  size_t cali_count_ = 0;
-  bool in_cali_ = false;
 
   LibXR::Topic topic_gyro_, topic_accl_;
   LibXR::GPIO *cs_, *int_;
