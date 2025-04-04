@@ -5,6 +5,9 @@
 module_name: ICM42688
 module_description: TDK ICM42688 六轴 IMU 传感器模块 / TDK ICM42688 6-axis IMU Driver
 constructor_args:
+  - datarate: ICM42688<HardwareContainer>::DataRate::DATA_RATE_1KHZ
+  - accl_range: ICM42688<HardwareContainer>::AcclRange::RANGE_16G
+  - gyro_range: ICM42688<HardwareContainer>::GyroRange::DPS_2000
   - rotation:
       w: 1.0
       x: 0.0
@@ -40,32 +43,54 @@ repository: https://github.com/xrobot-org/ICM42688
 template <typename HardwareContainer>
 class ICM42688 : public LibXR::Application {
  public:
-  static constexpr float DEG2RAD = 0.01745329251f;
+  static constexpr float M_DEG2RAD_MULT = 0.01745329251f;
   static constexpr uint8_t ICM42688_REG_TEMP_DATA1 = 0x1D;
   static constexpr uint8_t ICM42688_READ_LEN = 14;
 
-  typedef enum {
-    DATA_RATE_UNKNOW,
-    DATA_RATE_32KHZ,
-    DATA_RATE_16KHZ,
-    DATA_RATE_8KHZ,
-    DATA_RATE_4KHZ,
-    DATA_RATE_2KHZ,
-    DATA_RATE_1KHZ,
-    DATA_RATE_200HZ,
-    DATA_RATE_100HZ,
-    DATA_RATE_50HZ,
-    DATA_RATE_25HZ,
-    DATA_RATE_12_5HZ,
-    DATA_RATE_500HZ = 0XF,
+  typedef enum : uint8_t {
+    DATA_RATE_UNKNOW = 0,
+    DATA_RATE_32KHZ = 1,
+    DATA_RATE_16KHZ = 2,
+    DATA_RATE_8KHZ = 3,
+    DATA_RATE_4KHZ = 4,
+    DATA_RATE_2KHZ = 5,
+    DATA_RATE_1KHZ = 6,
+    DATA_RATE_200HZ = 7,
+    DATA_RATE_100HZ = 8,
+    DATA_RATE_50HZ = 9,
+    DATA_RATE_25HZ = 10,
+    DATA_RATE_12_5HZ = 11,
+    DATA_RATE_500HZ = 15,
   } DataRate;
 
+  typedef enum : uint8_t {
+    DPS_2000 = 0,
+    DPS_1000 = 1,
+    DPS_500 = 2,
+    DPS_250 = 3,
+    DPS_125 = 4,
+    DPS_62_5 = 5,
+    DPS_31_25 = 6,
+    DPS_15_625 = 7,
+  } GyroRange;
+
+  typedef enum : uint8_t {
+    RANGE_16G = 0,
+    RANGE_8G = 1,
+    RANGE_4G = 2,
+    RANGE_2G = 3,
+  } AcclRange;
+
   ICM42688(HardwareContainer &hw, LibXR::ApplicationManager &app,
+           DataRate data_rate, AcclRange accl_range, GyroRange gyro_range,
            LibXR::Quaternion<float> &&rotation,
            LibXR::PID<float>::Param &&pid_param, const char *gyro_topic_name,
            const char *accl_topic_name, float target_temperature,
            size_t task_stack_depth)
-      : target_temperature_(target_temperature),
+      : data_rate_(data_rate),
+        accl_range_(accl_range),
+        gyro_range_(gyro_range),
+        target_temperature_(target_temperature),
         topic_gyro_(gyro_topic_name, sizeof(gyro_data_)),
         topic_accl_(accl_topic_name, sizeof(accl_data_)),
         cs_(hw.template FindOrExit<LibXR::GPIO>({"icm42688_cs"})),
@@ -121,7 +146,7 @@ class ICM42688 : public LibXR::Application {
   void Off() { WriteSingle(0X4E, 0x00); }
   void On() { WriteSingle(0X4E, 0x0f); }
 
-  bool Init(DataRate data_rate = DATA_RATE_1KHZ) {
+  bool Init() {
     /* Select Bank 0 */
     WriteSingle(0x76, 0x00);
     /* Software reset */
@@ -146,30 +171,27 @@ class ICM42688 : public LibXR::Application {
     /* Select Bank 1 */
     WriteSingle(0x76, 0x01);
     WriteSingle(0x0B, 0xA0);  // Enable anti-aliasing and notch filters
-    WriteSingle(0x0C, 0x0C);  // GYRO_AAF_DELT = 12 (default 13)
-    WriteSingle(0x0D, 0x90);  // GYRO_AAF_DELTSQR = 144 (default 170)
-    WriteSingle(0x0E, 0x80);  // GYRO_AAF_BITSHIFT = 8 (default 8)
+    WriteSingle(0x0C, 0x05);  // GYRO_AAF_DELT = 5 (default 13)
+    WriteSingle(0x0D, 0x19);  // GYRO_AAF_DELTSQR = 25 (default 170)
+    WriteSingle(0x0E, 0xa0);  // GYRO_AAF_BITSHIFT = 10 (default 8)
 
     /* Configure ACCEL anti-aliasing filters */
     /* Select Bank 2 */
     WriteSingle(0x76, 0x02);
-    WriteSingle(0x03, 0x18);  // ACCEL_AAF_DELT = 12 (default 24)
-    WriteSingle(0x04, 0x90);  // ACCEL_AAF_DELTSQR = 144 (default 64)
-    WriteSingle(0x05, 0x80);  // ACCEL_AAF_BITSHIFT = 8 (default 6)
+    WriteSingle(0x03, 0x05);  // ACCEL_AAF_DELT = 5 (default 24)
+    WriteSingle(0x04, 0x19);  // ACCEL_AAF_DELTSQR = 25 (default 64)
+    WriteSingle(0x05, 0xa0);  // ACCEL_AAF_BITSHIFT = 10 (default 6)
 
-    /***** Custom Filter Set #1 @227.2Hz *****/
+    /***** Custom Filter Settings *****/
 
     /* Select Bank 0 */
     WriteSingle(0x76, 0x00);
-    /* Filter settings */
-    WriteSingle(0x52, 0x22);  // Set to 227.2Hz (code 0x03)
-
     /* Interrupt output configuration */
     WriteSingle(0x14, 0x12);  // INT1 & INT2: pulse mode, active low
     /* Temp & Gyro_Config1 */
-    WriteSingle(0x51, 0x96);  // Latency = 8ms
+    WriteSingle(0x51, 0xca);  // Latency = 32ms, GYRO_UI_FILT_ORD=3
     /* GYRO_ACCEL_CONFIG0 */
-    WriteSingle(0x52, 0x44);  // Set 1-bandwidth mode
+    WriteSingle(0x52, 0x22);  // Set LPF bandwidth
     /* ACCEL_CONFIG1 */
     WriteSingle(0x53, 0x0D);  // Reserved / no config
     /* INT_CONFIG0 */
@@ -196,9 +218,9 @@ class ICM42688 : public LibXR::Application {
     On();
 
     /* Gyroscope configuration */
-    WriteSingle(0x4F, data_rate | 0x40);  // 500dps, 1kHz
+    WriteSingle(0x4F, (uint8_t(gyro_range_) << 5) | uint8_t(data_rate_));
     /* Accelerometer configuration */
-    WriteSingle(0x50, data_rate | 0x40);  // 4G, 1kHz
+    WriteSingle(0x50, (uint8_t(accl_range_) << 5) | uint8_t(data_rate_));
 
     /* Select Bank 0 */
     WriteSingle(0x76, 0x00);
@@ -267,19 +289,28 @@ class ICM42688 : public LibXR::Application {
     for (int i = 0; i < 3; i++) {
       accl_raw_u16[i] =
           static_cast<int16_t>(buffer_[i * 2 + 2] << 8 | buffer_[i * 2 + 3]);
-      accl_raw[i] = static_cast<float>(accl_raw_u16[i]) / 8192.0f;
+      accl_raw[i] = static_cast<float>(accl_raw_u16[i]) * GetAcclLSB();
 
       gyro_raw_u16[i] =
           static_cast<int16_t>(buffer_[i * 2 + 8] << 8 | buffer_[i * 2 + 9]);
-      gyro_raw[i] = static_cast<float>(gyro_raw_u16[i]) / 16.384f * DEG2RAD;
+      gyro_raw[i] =
+          static_cast<float>(gyro_raw_u16[i]) * GetGyroLSB() * M_DEG2RAD_MULT;
+    }
+
+    if (in_cali_) {
+      gyro_cali_.data()[0] += gyro_raw_u16[0];
+      gyro_cali_.data()[1] += gyro_raw_u16[1];
+      gyro_cali_.data()[2] += gyro_raw_u16[2];
+      cali_counter_++;
     }
 
     accl_data_ = rotation_ * Eigen::Matrix<float, 3, 1>(
                                  accl_raw[0], accl_raw[1], accl_raw[2]);
 
     gyro_data_ = rotation_ * Eigen::Matrix<float, 3, 1>(
-                                 gyro_raw[0], gyro_raw[1], gyro_raw[2]) -
-                 gyro_data_key_.data_;
+                                 Eigen::Matrix<float, 3, 1>(
+                                     gyro_raw[0], gyro_raw[1], gyro_raw[2]) -
+                                 gyro_data_key_.data_);
   }
 
   void OnMonitor(void) override {
@@ -295,9 +326,52 @@ class ICM42688 : public LibXR::Application {
           accl_data_.y(), accl_data_.z());
     }
 
+    float ideal_dt = 0.0f;
+
+    switch (data_rate_) {
+      case DataRate::DATA_RATE_32KHZ:
+        ideal_dt = 0.00003125f;
+        break;
+      case DataRate::DATA_RATE_16KHZ:
+        ideal_dt = 0.0000625f;
+        break;
+      case DataRate::DATA_RATE_8KHZ:
+        ideal_dt = 0.000125f;
+        break;
+      case DataRate::DATA_RATE_4KHZ:
+        ideal_dt = 0.00025f;
+        break;
+      case DataRate::DATA_RATE_2KHZ:
+        ideal_dt = 0.0005f;
+        break;
+      case DataRate::DATA_RATE_1KHZ:
+        ideal_dt = 0.001f;
+        break;
+      case DataRate::DATA_RATE_500HZ:
+        ideal_dt = 0.002f;
+        break;
+      case DataRate::DATA_RATE_200HZ:
+        ideal_dt = 0.005f;
+        break;
+      case DataRate::DATA_RATE_100HZ:
+        ideal_dt = 0.01f;
+        break;
+      case DataRate::DATA_RATE_50HZ:
+        ideal_dt = 0.02f;
+        break;
+      case DataRate::DATA_RATE_25HZ:
+        ideal_dt = 0.04f;
+        break;
+      case DataRate::DATA_RATE_12_5HZ:
+        ideal_dt = 0.08f;
+        break;
+      default:
+        LibXR::STDIO::Printf("Unknown data rate\r\n");
+        break;
+    }
     /* Use other timer as HAL timebase (Because the priority of SysTick is
       lowest) and set the priority to the highest to avoid this issue */
-    if (fabs(dt_) < 500 || fabs(dt_) > 1500) {
+    if (std::fabs(dt_.to_secondf() - ideal_dt) > 0.00015f) {
       LibXR::STDIO::Printf("ICM42688 Frequency Error: %6f\r\n",
                            dt_.to_secondf());
     }
@@ -314,7 +388,8 @@ class ICM42688 : public LibXR::Application {
           "  list_offset                  - Show current gyro calibration "
           "offset.\r\n");
       LibXR::STDIO::Printf(
-          "  cali                         - Start gyroscope calibration.\r\n");
+          "  cali                         - Start gyroscope "
+          "calibration.\r\n");
     } else if (argc == 2) {
       if (strcmp(argv[1], "list_offset") == 0) {
         LibXR::STDIO::Printf(
@@ -325,24 +400,33 @@ class ICM42688 : public LibXR::Application {
         self->gyro_data_key_.data_.x() = 0.0,
         self->gyro_data_key_.data_.y() = 0.0,
         self->gyro_data_key_.data_.z() = 0.0;
+        LibXR::Thread::Sleep(3000);
+        self->gyro_cali_ = Eigen::Matrix<int64_t, 3, 1>(0.0, 0.0, 0.0);
+        self->cali_counter_ = 0;
+        self->in_cali_ = true;
         LibXR::STDIO::Printf(
             "Starting gyroscope calibration. Please keep the device "
             "steady.\r\n");
-        double x = 0.0, y = 0.0, z = 0.0;
-        for (int i = 0; i < 30000; i++) {
-          x += static_cast<double>(self->gyro_data_.x()) / 30000.0;
-          y += static_cast<double>(self->gyro_data_.y()) / 30000.0;
-          z += static_cast<double>(self->gyro_data_.z()) / 30000.0;
-          if (i % 1000 == 0) {
-            LibXR::STDIO::Printf("Progress: %d / 30\r", i / 1000);
-          }
-          LibXR::Thread::Sleep(1);
+        for (int i = 0; i < 60; i++) {
+          LibXR::STDIO::Printf("Progress: %d / 60\r", i);
+          LibXR::Thread::Sleep(1000);
         }
         LibXR::STDIO::Printf("\r\nProgress: Done\r\n");
+        self->in_cali_ = false;
+        LibXR::Thread::Sleep(1000);
 
-        self->gyro_data_key_.data_.x() = static_cast<float>(x);
-        self->gyro_data_key_.data_.y() = static_cast<float>(y);
-        self->gyro_data_key_.data_.z() = static_cast<float>(z);
+        self->gyro_data_key_.data_.x() =
+            static_cast<double>(self->gyro_cali_.data()[0]) /
+            static_cast<double>(self->cali_counter_) * self->GetGyroLSB() *
+            M_DEG2RAD_MULT;
+        self->gyro_data_key_.data_.y() =
+            static_cast<double>(self->gyro_cali_.data()[1]) /
+            static_cast<double>(self->cali_counter_) * self->GetGyroLSB() *
+            M_DEG2RAD_MULT;
+        self->gyro_data_key_.data_.z() =
+            static_cast<double>(self->gyro_cali_.data()[2]) /
+            static_cast<double>(self->cali_counter_) * self->GetGyroLSB() *
+            M_DEG2RAD_MULT;
 
         LibXR::STDIO::Printf("\r\nCalibration result - x: %f, y: %f, z: %f\r\n",
                              self->gyro_data_key_.data_.x(),
@@ -350,20 +434,30 @@ class ICM42688 : public LibXR::Application {
                              self->gyro_data_key_.data_.z());
 
         LibXR::STDIO::Printf("Analyzing calibration quality...\r\n");
-        x = y = z = 0.0;
-        for (int i = 0; i < 30000; i++) {
-          x += static_cast<double>(self->gyro_data_.x()) / 30000.0;
-          y += static_cast<double>(self->gyro_data_.y()) / 30000.0;
-          z += static_cast<double>(self->gyro_data_.z()) / 30000.0;
-          if (i % 1000 == 0) {
-            LibXR::STDIO::Printf("Progress: %d / 30\r", i / 1000);
-          }
-          LibXR::Thread::Sleep(1);
+        self->gyro_cali_ = Eigen::Matrix<int64_t, 3, 1>(0.0, 0.0, 0.0);
+        self->cali_counter_ = 0;
+        self->in_cali_ = true;
+        for (int i = 0; i < 60; i++) {
+          LibXR::STDIO::Printf("Progress: %d / 60\r", i);
+          LibXR::Thread::Sleep(1000);
         }
         LibXR::STDIO::Printf("\r\nProgress: Done\r\n");
+        self->in_cali_ = false;
+        LibXR::Thread::Sleep(1000);
 
         LibXR::STDIO::Printf("\r\nCalibration error - x: %f, y: %f, z: %f\r\n",
-                             x, y, z);
+                             static_cast<double>(self->gyro_cali_.data()[0]) /
+                                     static_cast<double>(self->cali_counter_) *
+                                     self->GetGyroLSB() * M_DEG2RAD_MULT -
+                                 self->gyro_data_key_.data_.x(),
+                             static_cast<double>(self->gyro_cali_.data()[1]) /
+                                     static_cast<double>(self->cali_counter_) *
+                                     self->GetGyroLSB() * M_DEG2RAD_MULT -
+                                 self->gyro_data_key_.data_.y(),
+                             static_cast<double>(self->gyro_cali_.data()[2]) /
+                                     static_cast<double>(self->cali_counter_) *
+                                     self->GetGyroLSB() * M_DEG2RAD_MULT -
+                                 self->gyro_data_key_.data_.z());
 
         self->gyro_data_key_.Set(self->gyro_data_key_.data_);
         LibXR::STDIO::Printf("Calibration data saved.\r\n");
@@ -393,9 +487,56 @@ class ICM42688 : public LibXR::Application {
     return 0;
   }
 
+  float GetAcclLSB() {
+    switch (accl_range_) {
+      case AcclRange::RANGE_16G:
+        return 1.0 / 2048.0;
+      case AcclRange::RANGE_8G:
+        return 1.0 / 4096.0;
+      case AcclRange::RANGE_4G:
+        return 1.0 / 8192.0;
+      case AcclRange::RANGE_2G:
+        return 1.0 / 16384.0;
+      default:
+        ASSERT(false);
+        return 0.0;
+    }
+  }
+
+  float GetGyroLSB() {
+    switch (gyro_range_) {
+      case GyroRange::DPS_2000:
+        return 1.0 / 16.384f;
+      case GyroRange::DPS_1000:
+        return 1.0 / 32.768f;
+      case GyroRange::DPS_500:
+        return 1.0 / 65.536f;
+      case GyroRange::DPS_250:
+        return 1.0 / 131.072f;
+      case GyroRange::DPS_125:
+        return 1.0 / 262.144f;
+      case GyroRange::DPS_62_5:
+        return 1.0 / 524.288f;
+      case GyroRange::DPS_31_25:
+        return 1.0 / 1048.576f;
+      case GyroRange::DPS_15_625:
+        return 1.0 / 2097.152f;
+      default:
+        ASSERT(false);
+        return 0.0;
+    }
+  }
+
  private:
+  DataRate data_rate_;
+  AcclRange accl_range_;
+  GyroRange gyro_range_;
   float temperature_ = 0.0f;
   float target_temperature_ = 25.0f;
+
+  bool in_cali_ = false;
+  uint32_t cali_counter_ = 0;
+  Eigen::Matrix<std::int64_t, 3, 1> gyro_cali_;
 
   LibXR::TimestampUS last_int_time_ = 0;
   LibXR::TimestampUS::TimeDiffUS dt_ = 0;
