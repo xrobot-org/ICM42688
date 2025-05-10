@@ -5,9 +5,9 @@
 module_name: ICM42688
 module_description: TDK ICM42688 六轴 IMU 传感器模块 / TDK ICM42688 6-axis IMU Driver
 constructor_args:
-  - datarate: ICM42688<HardwareContainer>::DataRate::DATA_RATE_1KHZ
-  - accl_range: ICM42688<HardwareContainer>::AcclRange::RANGE_16G
-  - gyro_range: ICM42688<HardwareContainer>::GyroRange::DPS_2000
+  - datarate: ICM42688::DataRate::DATA_RATE_1KHZ
+  - accl_range: ICM42688::AcclRange::RANGE_16G
+  - gyro_range: ICM42688::GyroRange::DPS_2000
   - rotation:
       w: 1.0
       x: 0.0
@@ -40,7 +40,6 @@ repository: https://github.com/xrobot-org/ICM42688
 #include "spi.hpp"
 #include "transform.hpp"
 
-template <typename HardwareContainer>
 class ICM42688 : public LibXR::Application {
  public:
   static constexpr float M_DEG2RAD_MULT = 0.01745329251f;
@@ -81,7 +80,7 @@ class ICM42688 : public LibXR::Application {
     RANGE_2G = 3,
   } AcclRange;
 
-  ICM42688(HardwareContainer &hw, LibXR::ApplicationManager &app,
+  ICM42688(LibXR::HardwareContainer &hw, LibXR::ApplicationManager &app,
            DataRate data_rate, AcclRange accl_range, GyroRange gyro_range,
            LibXR::Quaternion<float> &&rotation,
            LibXR::PID<float>::Param &&pid_param, const char *gyro_topic_name,
@@ -111,7 +110,7 @@ class ICM42688 : public LibXR::Application {
     int_->DisableInterrupt();
 
     auto int_cb = LibXR::Callback<>::Create(
-        [](bool in_isr, ICM42688<HardwareContainer> *self) {
+        [](bool in_isr, ICM42688 *self) {
           auto now = LibXR::Timebase::GetMicroseconds();
           self->dt_ = now - self->last_int_time_;
           self->last_int_time_ = now;
@@ -129,13 +128,12 @@ class ICM42688 : public LibXR::Application {
     thread_.Create(this, ThreadFunc, "icm42688_thread", task_stack_depth,
                    LibXR::Thread::Priority::REALTIME);
 
-    void (*temp_ctrl_fun)(ICM42688<HardwareContainer> *) =
-        [](ICM42688<HardwareContainer> *self) {
-          float duty = self->pid_heat_.Calculate(self->target_temperature_,
-                                                 self->temperature_, 0.01f);
-          duty = std::clamp(duty, 0.0f, 1.0f);
-          self->pwm_->SetDutyCycle(duty);
-        };
+    void (*temp_ctrl_fun)(ICM42688 *) = [](ICM42688 *self) {
+      float duty = self->pid_heat_.Calculate(self->target_temperature_,
+                                             self->temperature_, 0.01f);
+      duty = std::clamp(duty, 0.0f, 1.0f);
+      self->pwm_->SetDutyCycle(duty);
+    };
 
     auto temp_ctrl = LibXR::Timer::CreateTask(temp_ctrl_fun, this, 10);
 
@@ -243,7 +241,7 @@ class ICM42688 : public LibXR::Application {
     return true;
   }
 
-  static void ThreadFunc(ICM42688<HardwareContainer> *self) {
+  static void ThreadFunc(ICM42688 *self) {
     self->pwm_->SetConfig({30000});
     self->pwm_->SetDutyCycle(0);
     self->pwm_->Enable();
@@ -377,8 +375,7 @@ class ICM42688 : public LibXR::Application {
     }
   }
 
-  static int CommandFunc(ICM42688<HardwareContainer> *self, int argc,
-                         char **argv) {
+  static int CommandFunc(ICM42688 *self, int argc, char **argv) {
     if (argc == 1) {
       LibXR::STDIO::Printf("Usage:\r\n");
       LibXR::STDIO::Printf(
