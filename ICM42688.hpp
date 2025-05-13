@@ -109,7 +109,7 @@ class ICM42688 : public LibXR::Application {
 
     int_->DisableInterrupt();
 
-    auto int_cb = LibXR::Callback<>::Create(
+    auto int_cb = LibXR::GPIO::Callback::Create(
         [](bool in_isr, ICM42688 *self) {
           auto now = LibXR::Timebase::GetMicroseconds();
           self->dt_ = now - self->last_int_time_;
