@@ -369,9 +369,9 @@ class ICM42688 : public LibXR::Application {
     }
     /* Use other timer as HAL timebase (Because the priority of SysTick is
       lowest) and set the priority to the highest to avoid this issue */
-    if (std::fabs(dt_.to_secondf() - ideal_dt) > 0.00015f) {
+    if (std::fabs(dt_.ToSecondf() - ideal_dt) > 0.00015f) {
       LibXR::STDIO::Printf("ICM42688 Frequency Error: %6f\r\n",
-                           dt_.to_secondf());
+                           dt_.ToSecondf());
     }
   }
 
