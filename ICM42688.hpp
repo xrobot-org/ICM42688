@@ -1,8 +1,7 @@
 #pragma once
 
 // clang-format off
-/* === MODULE MANIFEST ===
-module_name: ICM42688
+/* === MODULE MANIFEST V2 ===
 module_description: TDK ICM42688 六轴 IMU 传感器模块 / TDK ICM42688 6-axis IMU Driver
 constructor_args:
   - datarate: ICM42688::DataRate::DATA_RATE_1KHZ
@@ -25,8 +24,9 @@ constructor_args:
   - accl_topic_name: "icm42688_accl"
   - target_temperature: 45.0
   - task_stack_depth: 512
+template_args: []
 required_hardware: spi_icm42688 icm42688_cs icm42688_int pwm_icm42688_heat ramfs database
-repository: https://github.com/xrobot-org/ICM42688
+depends: []
 === END MANIFEST === */
 // clang-format on
 
