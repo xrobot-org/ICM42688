@@ -535,8 +535,8 @@ class ICM42688 : public LibXR::Application {
   uint32_t cali_counter_ = 0;
   Eigen::Matrix<std::int64_t, 3, 1> gyro_cali_;
 
-  LibXR::TimestampUS last_int_time_ = 0;
-  LibXR::TimestampUS::TimeDiffUS dt_ = 0;
+  LibXR::MicrosecondTimestamp last_int_time_ = 0;
+  LibXR::MicrosecondTimestamp::Duration dt_ = 0;
 
   uint8_t buffer_[ICM42688_READ_LEN];
   Eigen::Matrix<float, 3, 1> gyro_data_, accl_data_;
