@@ -120,10 +120,10 @@ class ICM42688 : public LibXR::Application {
     int_->RegisterCallback(int_cb);
 
     while (!Init()) {
-      LibXR::STDIO::Printf("ICM42688: Init failed. Retry...\r\n");
+      XR_LOG_ERROR("ICM42688: Init failed. Retry...");
       LibXR::Thread::Sleep(100);
     }
-    LibXR::STDIO::Printf("ICM42688: Init success.\r\n");
+    XR_LOG_PASS("ICM42688: Init success.");
 
     thread_.Create(this, ThreadFunc, "icm42688_thread", task_stack_depth,
                    LibXR::Thread::Priority::REALTIME);
@@ -318,8 +318,8 @@ class ICM42688 : public LibXR::Application {
         std::isnan(gyro_data_.x()) || std::isnan(gyro_data_.y()) ||
         std::isnan(gyro_data_.z()) || std::isnan(accl_data_.x()) ||
         std::isnan(accl_data_.y()) || std::isnan(accl_data_.z())) {
-      LibXR::STDIO::Printf(
-          "ICM42688: NaN data detected. gyro: %f %f %f, accl: %f %f %f\r\n",
+      XR_LOG_WARN(
+          "ICM42688: NaN data detected. gyro: %f %f %f, accl: %f %f %f",
           gyro_data_.x(), gyro_data_.y(), gyro_data_.z(), accl_data_.x(),
           accl_data_.y(), accl_data_.z());
     }
@@ -364,13 +364,13 @@ class ICM42688 : public LibXR::Application {
         ideal_dt = 0.08f;
         break;
       default:
-        LibXR::STDIO::Printf("Unknown data rate\r\n");
+        XR_LOG_ERROR("Unknown data rate.");
         break;
     }
     /* Use other timer as HAL timebase (Because the priority of SysTick is
       lowest) and set the priority to the highest to avoid this issue */
     if (std::fabs(dt_.ToSecondf() - ideal_dt) > 0.00015f) {
-      LibXR::STDIO::Printf("ICM42688 Frequency Error: %6f\r\n",
+      XR_LOG_WARN("ICM42688 Frequency Error: %6f",
                            dt_.ToSecondf());
     }
   }
@@ -397,13 +397,13 @@ class ICM42688 : public LibXR::Application {
         self->gyro_data_key_.data_.x() = 0.0,
         self->gyro_data_key_.data_.y() = 0.0,
         self->gyro_data_key_.data_.z() = 0.0;
-        LibXR::Thread::Sleep(3000);
         self->gyro_cali_ = Eigen::Matrix<int64_t, 3, 1>(0.0, 0.0, 0.0);
         self->cali_counter_ = 0;
         self->in_cali_ = true;
         LibXR::STDIO::Printf(
             "Starting gyroscope calibration. Please keep the device "
             "steady.\r\n");
+        LibXR::Thread::Sleep(3000);
         for (int i = 0; i < 60; i++) {
           LibXR::STDIO::Printf("Progress: %d / 60\r", i);
           LibXR::Thread::Sleep(1000);
