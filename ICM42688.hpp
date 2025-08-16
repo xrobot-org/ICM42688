@@ -20,6 +20,7 @@ constructor_args:
       i_limit: 0.3
       out_limit: 1.0
       cycle: false
+  - enable_clk_in: false
   - gyro_topic_name: "icm42688_gyro"
   - accl_topic_name: "icm42688_accl"
   - target_temperature: 45.0
@@ -83,13 +84,14 @@ class ICM42688 : public LibXR::Application {
   ICM42688(LibXR::HardwareContainer &hw, LibXR::ApplicationManager &app,
            DataRate data_rate, AcclRange accl_range, GyroRange gyro_range,
            LibXR::Quaternion<float> &&rotation,
-           LibXR::PID<float>::Param &&pid_param, const char *gyro_topic_name,
-           const char *accl_topic_name, float target_temperature,
-           size_t task_stack_depth)
+           LibXR::PID<float>::Param &&pid_param, bool enable_clk_in,
+           const char *gyro_topic_name, const char *accl_topic_name,
+           float target_temperature, size_t task_stack_depth)
       : data_rate_(data_rate),
         accl_range_(accl_range),
         gyro_range_(gyro_range),
         target_temperature_(target_temperature),
+        enable_clk_in_(enable_clk_in),
         topic_gyro_(gyro_topic_name, sizeof(gyro_data_)),
         topic_accl_(accl_topic_name, sizeof(accl_data_)),
         cs_(hw.template FindOrExit<LibXR::GPIO>({"icm42688_cs"})),
@@ -230,7 +232,9 @@ class ICM42688 : public LibXR::Application {
     WriteSingle(0x76, 0x01);
 
     /* Enable external clock (CLKIN) */
-    WriteSingle(0x7B, 0x04);
+    if (enable_clk_in_) {
+      WriteSingle(0x7B, 0x04);
+    }
 
     /* Select Bank 0 */
     WriteSingle(0x76, 0x00);
@@ -318,10 +322,9 @@ class ICM42688 : public LibXR::Application {
         std::isnan(gyro_data_.x()) || std::isnan(gyro_data_.y()) ||
         std::isnan(gyro_data_.z()) || std::isnan(accl_data_.x()) ||
         std::isnan(accl_data_.y()) || std::isnan(accl_data_.z())) {
-      XR_LOG_WARN(
-          "ICM42688: NaN data detected. gyro: %f %f %f, accl: %f %f %f",
-          gyro_data_.x(), gyro_data_.y(), gyro_data_.z(), accl_data_.x(),
-          accl_data_.y(), accl_data_.z());
+      XR_LOG_WARN("ICM42688: NaN data detected. gyro: %f %f %f, accl: %f %f %f",
+                  gyro_data_.x(), gyro_data_.y(), gyro_data_.z(),
+                  accl_data_.x(), accl_data_.y(), accl_data_.z());
     }
 
     float ideal_dt = 0.0f;
@@ -370,8 +373,7 @@ class ICM42688 : public LibXR::Application {
     /* Use other timer as HAL timebase (Because the priority of SysTick is
       lowest) and set the priority to the highest to avoid this issue */
     if (std::fabs(dt_.ToSecondf() - ideal_dt) > 0.00015f) {
-      XR_LOG_WARN("ICM42688 Frequency Error: %6f",
-                           dt_.ToSecondf());
+      XR_LOG_WARN("ICM42688 Frequency Error: %6f", dt_.ToSecondf());
     }
   }
 
@@ -531,6 +533,7 @@ class ICM42688 : public LibXR::Application {
   float temperature_ = 0.0f;
   float target_temperature_ = 25.0f;
 
+  bool enable_clk_in_ = false;
   bool in_cali_ = false;
   uint32_t cali_counter_ = 0;
   Eigen::Matrix<std::int64_t, 3, 1> gyro_cali_;
