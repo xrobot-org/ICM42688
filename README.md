@@ -1,5 +1,16 @@
 # ICM42688
 
+## Static assembly source line
+
+This source line uses explicit C++ constructor dependencies and ordered instance
+arguments. Inspect the current primary header with `xrobot_mod_parser --path .`;
+its declarations, not old manifest/config examples, define the interface.
+Historical HardwareContainer/ApplicationManager examples below apply only to the
+older dynamic source tags. Device/protocol descriptions remain relevant.
+See the XRobot [migration guide](https://github.com/xrobot-org/XRobot/blob/dev/MIGRATION.md).
+Compilation is not hardware validation; retain version-specific board evidence.
+
+
 TDK ICM42688 六轴 IMU 传感器模块 / TDK ICM42688 6-axis IMU Driver
 
 ## 硬件需求 / Required Hardware
@@ -27,4 +38,3 @@ spi\_icm42688, icm42688\_cs, icm42688\_int, pwm\_icm42688\_heat, ramfs, database
 ![Group Delay](./Group%20Delay.png)
 
 ![Frequency Response](./Frequency%20Response.png)
-
