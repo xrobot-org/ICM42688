@@ -65,32 +65,47 @@ class ICM42688
     RANGE_2G = 3,
   } AcclRange;
 
-  ICM42688(LibXR::GPIO& external_icm42688_cs, LibXR::GPIO& external_icm42688_int,
-           LibXR::SPI& external_spi_icm42688, LibXR::PWM& external_pwm_icm42688_heat,
-           LibXR::Database& external_database, LibXR::RamFS& external_ramfs,
-           DataRate data_rate, AcclRange accl_range, GyroRange gyro_range,
-           LibXR::Quaternion<float>&& rotation, LibXR::PID<float>::Param&& pid_param,
-           bool enable_clk_in, const char* gyro_topic_name, const char* accl_topic_name,
-           float target_temperature, size_t task_stack_depth)
-      : data_rate_(data_rate),
-        accl_range_(accl_range),
-        gyro_range_(gyro_range),
-        target_temperature_(target_temperature),
-        enable_clk_in_(enable_clk_in),
-        topic_gyro_(LibXR::Topic::CreateTopic<decltype(gyro_data_)>(gyro_topic_name)),
-        topic_accl_(LibXR::Topic::CreateTopic<decltype(accl_data_)>(accl_topic_name)),
-        cs_(std::addressof(external_icm42688_cs)),
-        int_(std::addressof(external_icm42688_int)),
-        spi_(std::addressof(external_spi_icm42688)),
-        pwm_(std::addressof(external_pwm_icm42688_heat)),
-        rotation_(std::move(rotation)),
-        pid_heat_(pid_param),
+  struct Param
+  {
+    DataRate data_rate;
+    AcclRange accl_range;
+    GyroRange gyro_range;
+    LibXR::Quaternion<float> rotation;
+    LibXR::PID<float>::Param pid_param;
+    bool enable_clk_in;
+    const char* gyro_topic_name;
+    const char* accl_topic_name;
+    float target_temperature;
+    size_t task_stack_depth;
+  };
+
+  ICM42688(
+      LibXR::GPIO& cs,
+      LibXR::GPIO& interrupt,
+      LibXR::SPI& spi,
+      LibXR::PWM& heater_pwm,
+      LibXR::Database& database,
+      LibXR::RamFS& ramfs,
+      const Param& param = {.data_rate = ICM42688::DataRate::DATA_RATE_1KHZ, .accl_range = ICM42688::AcclRange::RANGE_16G, .gyro_range = ICM42688::GyroRange::DPS_2000, .rotation = {1.0f, 0.0f, 0.0f, 0.0f}, .pid_param = {.k = 0.2f, .p = 1.0f, .i = 0.1f, .d = 0.0f, .i_limit = 0.3f, .out_limit = 1.0f, .cycle = false}, .enable_clk_in = false, .gyro_topic_name = "icm42688_gyro", .accl_topic_name = "icm42688_accl", .target_temperature = 45.0f, .task_stack_depth = 512})
+      : data_rate_(param.data_rate),
+        accl_range_(param.accl_range),
+        gyro_range_(param.gyro_range),
+        target_temperature_(param.target_temperature),
+        enable_clk_in_(param.enable_clk_in),
+        topic_gyro_(LibXR::Topic::CreateTopic<decltype(gyro_data_)>(param.gyro_topic_name)),
+        topic_accl_(LibXR::Topic::CreateTopic<decltype(accl_data_)>(param.accl_topic_name)),
+        cs_(std::addressof(cs)),
+        int_(std::addressof(interrupt)),
+        spi_(std::addressof(spi)),
+        pwm_(std::addressof(heater_pwm)),
+        rotation_(std::move(param.rotation)),
+        pid_heat_(param.pid_param),
         op_spi_(sem_spi_),
         cmd_file_(LibXR::RamFS::CreateFile("icm42688", CommandFunc, this)),
-        gyro_data_key_(external_database, "icm42688_gyro_data",
+        gyro_data_key_(database, "icm42688_gyro_data",
                        Eigen::Matrix<float, 3, 1>(0.0f, 0.0f, 0.0f))
   {
-    external_ramfs.Add(cmd_file_);
+    ramfs.Add(cmd_file_);
 
     int_->DisableInterrupt();
 
@@ -112,7 +127,7 @@ class ICM42688
     }
     XR_LOG_PASS("ICM42688: Init success.");
 
-    thread_.Create(this, ThreadFunc, "icm42688_thread", task_stack_depth,
+    thread_.Create(this, ThreadFunc, "icm42688_thread", param.task_stack_depth,
                    LibXR::Thread::Priority::REALTIME);
 
     void (*temp_ctrl_fun)(ICM42688*) = [](ICM42688* self)
