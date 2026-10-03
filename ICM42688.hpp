@@ -139,21 +139,33 @@ class ICM42688
    * @param param 配置参数。
    *              Configuration parameters.
    */
-  ICM42688(
-      LibXR::GPIO& cs,
-      LibXR::GPIO& interrupt,
-      LibXR::SPI& spi,
-      LibXR::PWM& heater_pwm,
-      LibXR::Database& database,
-      LibXR::RamFS& ramfs,
-      const Param& param = {.data_rate = ICM42688::DataRate::DATA_RATE_1KHZ, .accl_range = ICM42688::AcclRange::RANGE_16G, .gyro_range = ICM42688::GyroRange::DPS_2000, .rotation = {1.0f, 0.0f, 0.0f, 0.0f}, .pid_param = {.k = 0.2f, .p = 1.0f, .i = 0.1f, .d = 0.0f, .i_limit = 0.3f, .out_limit = 1.0f, .cycle = false}, .enable_clk_in = false, .gyro_topic_name = "icm42688_gyro", .accl_topic_name = "icm42688_accl", .target_temperature = 45.0f, .task_stack_depth = 512})
+  ICM42688(LibXR::GPIO& cs, LibXR::GPIO& interrupt, LibXR::SPI& spi,
+           LibXR::PWM& heater_pwm, LibXR::Database& database, LibXR::RamFS& ramfs,
+           const Param& param = {.data_rate = ICM42688::DataRate::DATA_RATE_1KHZ,
+                                 .accl_range = ICM42688::AcclRange::RANGE_16G,
+                                 .gyro_range = ICM42688::GyroRange::DPS_2000,
+                                 .rotation = {1.0f, 0.0f, 0.0f, 0.0f},
+                                 .pid_param = {.k = 0.2f,
+                                               .p = 1.0f,
+                                               .i = 0.1f,
+                                               .d = 0.0f,
+                                               .i_limit = 0.3f,
+                                               .out_limit = 1.0f,
+                                               .cycle = false},
+                                 .enable_clk_in = false,
+                                 .gyro_topic_name = "icm42688_gyro",
+                                 .accl_topic_name = "icm42688_accl",
+                                 .target_temperature = 45.0f,
+                                 .task_stack_depth = 512})
       : data_rate_(param.data_rate),
         accl_range_(param.accl_range),
         gyro_range_(param.gyro_range),
         target_temperature_(param.target_temperature),
         enable_clk_in_(param.enable_clk_in),
-        topic_gyro_(LibXR::Topic::CreateTopic<decltype(gyro_data_)>(param.gyro_topic_name)),
-        topic_accl_(LibXR::Topic::CreateTopic<decltype(accl_data_)>(param.accl_topic_name)),
+        topic_gyro_(
+            LibXR::Topic::CreateTopic<decltype(gyro_data_)>(param.gyro_topic_name)),
+        topic_accl_(
+            LibXR::Topic::CreateTopic<decltype(accl_data_)>(param.accl_topic_name)),
         cs_(std::addressof(cs)),
         int_(std::addressof(interrupt)),
         spi_(std::addressof(spi)),
@@ -336,7 +348,7 @@ class ICM42688
    */
   static void ThreadFunc(ICM42688* self)
   {
-    self->pwm_->SetConfig({30000});
+    self->pwm_->SetConfig({.frequency = 30000});
     self->pwm_->SetDutyCycle(0);
     self->pwm_->Enable();
 
