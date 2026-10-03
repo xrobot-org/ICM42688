@@ -199,6 +199,12 @@ class ICM42688
     }
     XR_LOG_PASS("ICM42688: Init success.");
 
+    // 加热 PWM 在温控定时任务启动前配置好
+    // The heater PWM is configured before the temperature control task starts
+    pwm_->SetConfig({.frequency = 30000});
+    pwm_->SetDutyCycle(0);
+    pwm_->Enable();
+
     thread_.Create(this, ThreadFunc, "icm42688_thread", param.task_stack_depth,
                    LibXR::Thread::Priority::REALTIME);
 
@@ -339,19 +345,15 @@ class ICM42688
   }
 
   /**
-   * @brief 采样线程：启动加热 PWM，等待 data-ready 中断，读取并发布陀螺仪与加速度数据。
-   *        Sampling thread: start the heater PWM, wait for the data-ready interrupt, then
-   *        read and publish the gyroscope and acceleration data.
+   * @brief 采样线程：等待 data-ready 中断，读取并发布陀螺仪与加速度数据。
+   *        Sampling thread: wait for the data-ready interrupt, then read and publish the
+   *        gyroscope and acceleration data.
    *
    * @param self ICM42688 实例。
    *             ICM42688 instance.
    */
   static void ThreadFunc(ICM42688* self)
   {
-    self->pwm_->SetConfig({.frequency = 30000});
-    self->pwm_->SetDutyCycle(0);
-    self->pwm_->Enable();
-
     while (true)
     {
       if (self->new_data_.Wait(50) == LibXR::ErrorCode::OK)
