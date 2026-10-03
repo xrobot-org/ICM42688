@@ -21,64 +21,124 @@ depends: []
 #include "thread.hpp"
 #include "transform.hpp"
 
+/**
+ * @brief ICM42688 6 轴 IMU 驱动模块，负责初始化、数据采集、温控与 Topic 发布。
+ *        Driver Module for the ICM42688 6-axis IMU: initialization, data acquisition,
+ *        temperature control and Topic publishing.
+ */
 class ICM42688
 {
  public:
+  /// 角度到弧度的换算系数 (rad/deg)
+  /// Degree-to-radian factor (rad/deg)
   static constexpr float M_DEG2RAD_MULT = 0.01745329251f;
+  /// 数据区起始寄存器 TEMP_DATA1
+  /// Start register of the data block, TEMP_DATA1
   static constexpr uint8_t ICM42688_REG_TEMP_DATA1 = 0x1D;
+  /// 一次 burst 读取的字节数：温度 2 + 加速度 6 + 角速度 6
+  /// Bytes per burst read: temperature 2 + acceleration 6 + angular velocity 6
   static constexpr uint8_t ICM42688_READ_LEN = 14;
 
+  /**
+   * @brief 陀螺仪与加速度计的 ODR，数值对应 GYRO_CONFIG0 / ACCEL_CONFIG0 的 ODR 字段。
+   *        ODR of the gyroscope and the accelerometer; the value is the ODR field of
+   *        GYRO_CONFIG0 / ACCEL_CONFIG0.
+   */
   typedef enum : uint8_t
   {
-    DATA_RATE_UNKNOW = 0,
-    DATA_RATE_32KHZ = 1,
-    DATA_RATE_16KHZ = 2,
-    DATA_RATE_8KHZ = 3,
-    DATA_RATE_4KHZ = 4,
-    DATA_RATE_2KHZ = 5,
-    DATA_RATE_1KHZ = 6,
-    DATA_RATE_200HZ = 7,
-    DATA_RATE_100HZ = 8,
-    DATA_RATE_50HZ = 9,
-    DATA_RATE_25HZ = 10,
-    DATA_RATE_12_5HZ = 11,
-    DATA_RATE_500HZ = 15,
+    DATA_RATE_UNKNOW = 0,   ///< 未指定
+                            ///< Unspecified
+    DATA_RATE_32KHZ = 1,    ///< 32 kHz
+    DATA_RATE_16KHZ = 2,    ///< 16 kHz
+    DATA_RATE_8KHZ = 3,     ///< 8 kHz
+    DATA_RATE_4KHZ = 4,     ///< 4 kHz
+    DATA_RATE_2KHZ = 5,     ///< 2 kHz
+    DATA_RATE_1KHZ = 6,     ///< 1 kHz
+    DATA_RATE_200HZ = 7,    ///< 200 Hz
+    DATA_RATE_100HZ = 8,    ///< 100 Hz
+    DATA_RATE_50HZ = 9,     ///< 50 Hz
+    DATA_RATE_25HZ = 10,    ///< 25 Hz
+    DATA_RATE_12_5HZ = 11,  ///< 12.5 Hz
+    DATA_RATE_500HZ = 15,   ///< 500 Hz
   } DataRate;
 
+  /**
+   * @brief 陀螺仪量程。
+   *        Gyroscope range.
+   */
   typedef enum : uint8_t
   {
-    DPS_2000 = 0,
-    DPS_1000 = 1,
-    DPS_500 = 2,
-    DPS_250 = 3,
-    DPS_125 = 4,
-    DPS_62_5 = 5,
-    DPS_31_25 = 6,
-    DPS_15_625 = 7,
+    DPS_2000 = 0,    ///< ±2000 dps
+    DPS_1000 = 1,    ///< ±1000 dps
+    DPS_500 = 2,     ///< ±500 dps
+    DPS_250 = 3,     ///< ±250 dps
+    DPS_125 = 4,     ///< ±125 dps
+    DPS_62_5 = 5,    ///< ±62.5 dps
+    DPS_31_25 = 6,   ///< ±31.25 dps
+    DPS_15_625 = 7,  ///< ±15.625 dps
   } GyroRange;
 
+  /**
+   * @brief 加速度计量程。
+   *        Accelerometer range.
+   */
   typedef enum : uint8_t
   {
-    RANGE_16G = 0,
-    RANGE_8G = 1,
-    RANGE_4G = 2,
-    RANGE_2G = 3,
+    RANGE_16G = 0,  ///< ±16 g
+    RANGE_8G = 1,   ///< ±8 g
+    RANGE_4G = 2,   ///< ±4 g
+    RANGE_2G = 3,   ///< ±2 g
   } AcclRange;
 
+  /**
+   * @brief ICM42688 配置参数。
+   *        ICM42688 configuration parameters.
+   */
   struct Param
   {
-    DataRate data_rate;
-    AcclRange accl_range;
-    GyroRange gyro_range;
-    LibXR::Quaternion<float> rotation;
-    LibXR::PID<float>::Param pid_param;
-    bool enable_clk_in;
-    const char* gyro_topic_name;
-    const char* accl_topic_name;
-    float target_temperature;
-    size_t task_stack_depth;
+    DataRate data_rate;  ///< 陀螺仪与加速度计的 ODR
+    ///< ODR of the gyroscope and the accelerometer
+    AcclRange accl_range;  ///< 加速度计量程
+    ///< Accelerometer range
+    GyroRange gyro_range;  ///< 陀螺仪量程
+    ///< Gyroscope range
+    LibXR::Quaternion<float> rotation;  ///< 传感器到应用坐标系的四元数 (w, x, y, z)
+    ///< Quaternion (w, x, y, z), sensor to application frame
+    LibXR::PID<float>::Param pid_param;  ///< 温控 PID，输出为 PWM 占空比 (0.0-1.0)
+    ///< Temperature PID, output is the PWM duty cycle (0.0-1.0)
+    bool enable_clk_in;  ///< 为 true 时使用外部时钟输入 CLKIN
+    ///< When true, use the external clock input CLKIN
+    const char* gyro_topic_name;  ///< 陀螺仪 Topic 名称
+    ///< Gyroscope Topic name
+    const char* accl_topic_name;  ///< 加速度计 Topic 名称
+    ///< Accelerometer Topic name
+    float target_temperature;  ///< 目标温度 (°C)
+    ///< Target temperature (°C)
+    size_t task_stack_depth;  ///< 采样线程栈深
+    ///< Sampling thread stack depth
   };
 
+  /**
+   * @brief 构造 ICM42688：注册中断与 RamFS 命令，初始化芯片，创建采样线程与温控任务。
+   *        Construct ICM42688: register the interrupt and the RamFS command, initialize
+   *        the chip, and create the sampling thread and the temperature-control task.
+   *
+   * @param cs 片选 GPIO。
+   *           Chip-select GPIO.
+   * @param interrupt INT1 数据就绪中断 GPIO，需由 BSP 配置为下降沿中断。
+   *                  INT1 data-ready interrupt GPIO, configured by the BSP as a
+   *                  falling-edge interrupt.
+   * @param spi 连接 ICM42688 的 SPI。
+   *            SPI connected to the ICM42688.
+   * @param heater_pwm 加热电阻的 PWM。
+   *                   PWM of the heating resistor.
+   * @param database 保存陀螺仪零偏的 Database。
+   *                 Database that stores the gyroscope zero offset.
+   * @param ramfs 接收 `icm42688` 命令的 RamFS。
+   *              RamFS that receives the `icm42688` command.
+   * @param param 配置参数。
+   *              Configuration parameters.
+   */
   ICM42688(
       LibXR::GPIO& cs,
       LibXR::GPIO& interrupt,
@@ -144,9 +204,26 @@ class ICM42688
     LibXR::Timer::Start(temp_ctrl);
   }
 
+  /**
+   * @brief 关闭加速度计与陀螺仪。
+   *        Power off the accelerometer and the gyroscope.
+   */
   void Off() { WriteSingle(0X4E, 0x00); }
+
+  /**
+   * @brief 以低噪声模式开启加速度计与陀螺仪。
+   *        Power on the accelerometer and the gyroscope in low-noise mode.
+   */
   void On() { WriteSingle(0X4E, 0x0f); }
 
+  /**
+   * @brief 软复位芯片，校验 WHO_AM_I，并配置滤波器、中断、量程与 ODR。
+   *        Soft-reset the chip, check WHO_AM_I, and configure the filters, the
+   *        interrupt, the ranges and the ODR.
+   *
+   * @return 初始化成功返回 true，WHO_AM_I 不符时返回 false。
+   *         True on success, false when WHO_AM_I does not match.
+   */
   bool Init()
   {
     /* Select Bank 0 */
@@ -249,6 +326,14 @@ class ICM42688
     return true;
   }
 
+  /**
+   * @brief 采样线程：启动加热 PWM，等待 data-ready 中断，读取并发布陀螺仪与加速度数据。
+   *        Sampling thread: start the heater PWM, wait for the data-ready interrupt, then
+   *        read and publish the gyroscope and acceleration data.
+   *
+   * @param self ICM42688 实例。
+   *             ICM42688 instance.
+   */
   static void ThreadFunc(ICM42688* self)
   {
     self->pwm_->SetConfig({30000});
@@ -267,6 +352,15 @@ class ICM42688
     }
   }
 
+  /**
+   * @brief 写一个寄存器。
+   *        Write one register.
+   *
+   * @param reg 寄存器地址。
+   *            Register address.
+   * @param data 写入的值。
+   *             Value to write.
+   */
   void WriteSingle(uint8_t reg, uint8_t data)
   {
     cs_->Write(false);
@@ -274,6 +368,15 @@ class ICM42688
     cs_->Write(true);
   }
 
+  /**
+   * @brief 等待 50 ms 后读一个寄存器。
+   *        Wait 50 ms, then read one register.
+   *
+   * @param reg 寄存器地址。
+   *            Register address.
+   * @return 寄存器的值。
+   *         Register value.
+   */
   uint8_t ReadSingle(uint8_t reg)
   {
     LibXR::Thread::Sleep(50);
@@ -284,6 +387,15 @@ class ICM42688
     return data;
   }
 
+  /**
+   * @brief 从起始寄存器连续读取 len 字节到内部缓冲区。
+   *        Read len bytes from the start register into the internal buffer.
+   *
+   * @param reg 起始寄存器地址。
+   *            Start register address.
+   * @param len 读取字节数。
+   *            Number of bytes to read.
+   */
   void Read(uint8_t reg, uint8_t len)
   {
     cs_->Write(false);
@@ -291,6 +403,12 @@ class ICM42688
     cs_->Write(true);
   }
 
+  /**
+   * @brief 解析缓冲区中的温度、加速度与角速度；角速度减去零偏，两者再乘以 rotation。
+   *        Parse the temperature, acceleration and angular velocity in the buffer; the
+   *        angular velocity has the zero offset subtracted, and both vectors are
+   *        multiplied by rotation.
+   */
   void Parse()
   {
     int16_t t = static_cast<int16_t>(buffer_[0] << 8 | buffer_[1]);
@@ -327,6 +445,13 @@ class ICM42688
                      gyro_data_key_.data_);
   }
 
+  /**
+   * @brief 监控回调：数据含 NaN 或 Inf 时输出警告；中断间隔偏离 ODR 理想周期超过
+   *        150 us 时输出频率错误警告。
+   *        Monitor callback: log a warning when the data contains NaN or Inf, and a
+   *        frequency-error warning when the interrupt interval deviates from the ideal
+   *        ODR period by more than 150 us.
+   */
   void OnMonitor(void)
   {
     if (std::isinf(gyro_data_.x()) || std::isinf(gyro_data_.y()) ||
@@ -391,6 +516,20 @@ class ICM42688
     }
   }
 
+  /**
+   * @brief RamFS 命令 `icm42688`：显示数据、查看陀螺仪零偏、校准零偏。
+   *        RamFS command `icm42688`: show data, list the gyroscope zero offset, and
+   *        calibrate the zero offset.
+   *
+   * @param self ICM42688 实例。
+   *             ICM42688 instance.
+   * @param argc 参数个数。
+   *             Argument count.
+   * @param argv 参数列表。
+   *             Argument list.
+   * @return 0 表示命令已处理；参数个数无效时返回 -1。
+   *         0 when the command is handled; -1 when the argument count is invalid.
+   */
   static int CommandFunc(ICM42688* self, int argc, char** argv)
   {
     if (argc == 1)
@@ -509,6 +648,13 @@ class ICM42688
     return 0;
   }
 
+  /**
+   * @brief 当前加速度计量程下一个 LSB 对应的加速度。
+   *        Acceleration represented by one LSB at the current accelerometer range.
+   *
+   * @return 单位 g/LSB。
+   *         Value in g/LSB.
+   */
   float GetAcclLSB()
   {
     switch (accl_range_)
@@ -527,6 +673,13 @@ class ICM42688
     }
   }
 
+  /**
+   * @brief 当前陀螺仪量程下一个 LSB 对应的角速度。
+   *        Angular velocity represented by one LSB at the current gyroscope range.
+   *
+   * @return 单位 dps/LSB。
+   *         Value in dps/LSB.
+   */
   float GetGyroLSB()
   {
     switch (gyro_range_)
