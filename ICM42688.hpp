@@ -2,7 +2,7 @@
 
 // clang-format off
 /* === MODULE MANIFEST V2 ===
-module_description: TDK ICM42688 六轴 IMU 传感器模块 / TDK ICM42688 6-axis IMU Driver
+module_description: TDK ICM42688 6 轴 IMU（SPI）驱动模块 / Driver Module for the TDK ICM42688 6-axis IMU over SPI
 depends: []
 === END MANIFEST === */
 // clang-format on
@@ -385,8 +385,6 @@ class ICM42688
         XR_LOG_ERROR("Unknown data rate.");
         break;
     }
-    /* Use other timer as HAL timebase (Because the priority of SysTick is
-      lowest) and set the priority to the highest to avoid this issue */
     if (std::fabs(dt_.ToSecondf() - ideal_dt) > 0.00015f)
     {
       XR_LOG_WARN("ICM42688 Frequency Error: %6f", dt_.ToSecondf());
