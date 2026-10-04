@@ -40,13 +40,9 @@ The Module registers the command `icm42688` in RamFS:
 
 ## 2. 滤波器特性 / Filter Response
 
-下图为组合滤波器的群延迟与频率响应，频率响应的 -3 dB 点约为 176.3 Hz，群延迟最大为 4.15 个采样点。
+陀螺仪的抗混叠滤波器为二阶，3 dB 带宽 213 Hz；UI 滤波器为三阶，带宽设置为 max(400 Hz, ODR)/5。默认 ODR 1 kHz 时，UI 滤波器的 3 dB 带宽为 195.8 Hz，直流群延迟为 2.7 ms。以上数值取自 ICM-42688-P 数据手册（DS-000347）第 5.3 节和第 5.5 节的表格，其他 ODR 下的数值见同一表格。
 
-The figures show the group delay and the frequency response of the combined filter; the -3 dB point of the frequency response is about 176.3 Hz and the maximum group delay is 4.15 samples.
-
-![Group Delay](./Group%20Delay.png)
-
-![Frequency Response](./Frequency%20Response.png)
+The gyroscope anti-alias filter is second order with a 3 dB bandwidth of 213 Hz; the UI filter is third order with its bandwidth set to max(400 Hz, ODR)/5. At the default ODR of 1 kHz, the UI filter has a 3 dB bandwidth of 195.8 Hz and a group delay of 2.7 ms at DC. These values come from the tables in sections 5.3 and 5.5 of the ICM-42688-P datasheet (DS-000347), which also list the values for the other ODRs.
 
 ## 3. 构造接口 / Constructor
 
