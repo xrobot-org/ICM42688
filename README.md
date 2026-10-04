@@ -4,7 +4,7 @@ TDK ICM42688 6 轴 IMU（SPI）驱动模块 / Driver Module for the TDK ICM42688
 
 ## 1. 模块作用 / Purpose
 
-构造时，ICM42688 软复位芯片，校验 `WHO_AM_I` 为 `0x47`，配置陀螺仪与加速度计的抗混叠滤波器（DELT 5、DELTSQR 25、BITSHIFT 10）、UI 滤波器和 INT1（脉冲、低电平有效，data-ready 映射到 INT1），关闭 AFSR，再按 `Param` 写入量程和 ODR。校验失败时每 100 ms 重试。中断 GPIO `interrupt` 由 BSP 配置为下降沿中断输入。
+构造时，ICM42688 软复位芯片，校验 `WHO_AM_I` 为 `0x47`，配置陀螺仪的抗混叠滤波器（DELT 5、DELTSQR 25、BITSHIFT 10），关闭加速度计的抗混叠滤波器，配置 UI 滤波器和 INT1（脉冲、低电平有效，data-ready 映射到 INT1），关闭 AFSR，再按 `Param` 写入量程和 ODR。校验失败时每 100 ms 重试。中断 GPIO `interrupt` 由 BSP 配置为下降沿中断输入。
 
 采样线程 `icm42688_thread`（REALTIME 优先级）等待 data-ready 中断，用一次 burst 读出温度、加速度和角速度并发布。加速度单位为 g，乘以 `rotation`；角速度单位为 rad/s，先减去零偏再乘以 `rotation`。温度为 `raw / 132.48 + 25`（°C）。
 
@@ -21,7 +21,7 @@ TDK ICM42688 6 轴 IMU（SPI）驱动模块 / Driver Module for the TDK ICM42688
 - `icm42688 list_offset`：打印当前陀螺仪零偏。
 - `icm42688 cali`：陀螺仪零偏校准，期间设备保持静止。先等待 3 s，再采集 60 s 求平均零偏，然后采集 60 s 打印残差，最后把零偏写入 Database。
 
-Upon construction, ICM42688 soft-resets the chip, checks that `WHO_AM_I` is `0x47`, configures the anti-aliasing filters of the gyroscope and the accelerometer (DELT 5, DELTSQR 25, BITSHIFT 10), the UI filters and INT1 (pulse, active low, data-ready routed to INT1), disables AFSR, and then writes the ranges and the ODR from `Param`. When the check fails, it retries every 100 ms. The interrupt GPIO `interrupt` is configured by the BSP as a falling-edge interrupt input.
+Upon construction, ICM42688 soft-resets the chip, checks that `WHO_AM_I` is `0x47`, configures the anti-aliasing filter of the gyroscope (DELT 5, DELTSQR 25, BITSHIFT 10), turns the anti-aliasing filter of the accelerometer off, configures the UI filters and INT1 (pulse, active low, data-ready routed to INT1), disables AFSR, and then writes the ranges and the ODR from `Param`. When the check fails, it retries every 100 ms. The interrupt GPIO `interrupt` is configured by the BSP as a falling-edge interrupt input.
 
 The sampling thread `icm42688_thread` (REALTIME priority) waits for the data-ready interrupt, reads the temperature, acceleration and angular velocity in one burst and publishes them. The acceleration unit is g, multiplied by `rotation`; the angular velocity unit is rad/s, with the zero offset subtracted before the multiplication by `rotation`. The temperature is `raw / 132.48 + 25` (°C).
 
@@ -40,13 +40,9 @@ The Module registers the command `icm42688` in RamFS:
 
 ## 2. 滤波器特性 / Filter Response
 
-下图为组合滤波器的群延迟与频率响应，频率响应的 -3 dB 点约为 176.3 Hz，群延迟最大为 4.15 个采样点。
+陀螺仪的抗混叠滤波器为二阶，3 dB 带宽 213 Hz；UI 滤波器为三阶，带宽设置为 max(400 Hz, ODR)/5。默认 ODR 1 kHz 时，UI 滤波器的 3 dB 带宽为 195.8 Hz，直流群延迟为 2.7 ms。以上数值取自 ICM-42688-P 数据手册（DS-000347）第 5.3 节和第 5.5 节的表格，其他 ODR 下的数值见同一表格。
 
-The figures show the group delay and the frequency response of the combined filter; the -3 dB point of the frequency response is about 176.3 Hz and the maximum group delay is 4.15 samples.
-
-![Group Delay](./Group%20Delay.png)
-
-![Frequency Response](./Frequency%20Response.png)
+The gyroscope anti-alias filter is second order with a 3 dB bandwidth of 213 Hz; the UI filter is third order with its bandwidth set to max(400 Hz, ODR)/5. At the default ODR of 1 kHz, the UI filter has a 3 dB bandwidth of 195.8 Hz and a group delay of 2.7 ms at DC. These values come from the tables in sections 5.3 and 5.5 of the ICM-42688-P datasheet (DS-000347), which also list the values for the other ODRs.
 
 ## 3. 构造接口 / Constructor
 

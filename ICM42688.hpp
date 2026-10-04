@@ -273,12 +273,12 @@ class ICM42688
     WriteSingle(0x0D, 0x19);  // GYRO_AAF_DELTSQR = 25 (default 170)
     WriteSingle(0x0E, 0xa0);  // GYRO_AAF_BITSHIFT = 10 (default 8)
 
-    /* Configure ACCEL anti-aliasing filters */
+    /* Turn the ACCEL anti-aliasing filter off */
     /* Select Bank 2 */
     WriteSingle(0x76, 0x02);
-    WriteSingle(0x03, 0x05);  // ACCEL_AAF_DELT = 5 (default 24)
-    WriteSingle(0x04, 0x19);  // ACCEL_AAF_DELTSQR = 25 (default 64)
-    WriteSingle(0x05, 0xa0);  // ACCEL_AAF_BITSHIFT = 10 (default 6)
+    WriteSingle(0x03, 0x05);  // ACCEL_AAF_DIS = 1 (filter off), ACCEL_AAF_DELT = 2
+    WriteSingle(0x04, 0x19);  // ACCEL_AAF_DELTSQR = 25, unused while the filter is off
+    WriteSingle(0x05, 0xa0);  // ACCEL_AAF_BITSHIFT = 10, unused while the filter is off
 
     /***** Custom Filter Settings *****/
 
