@@ -79,7 +79,7 @@ ICM42688(LibXR::GPIO& cs,
 - `enable_clk_in`：为 `true` 时使用外部时钟输入 CLKIN，默认 `false`。
 - `gyro_topic_name`、`accl_topic_name`：发布的 Topic 名称，默认 `"icm42688_gyro"`、`"icm42688_accl"`。
 - `target_temperature`：目标温度，单位 °C，默认 45。
-- `task_stack_depth`：采样线程栈深，默认 512。
+- `task_stack_depth`：采样线程栈深，单位字节，默认 512。
 
 Dependencies:
 
@@ -100,7 +100,7 @@ Configuration parameters (`Param`):
 - `enable_clk_in`: when `true`, the external clock input CLKIN is used, default `false`.
 - `gyro_topic_name`, `accl_topic_name`: names of the published Topics, default `"icm42688_gyro"` and `"icm42688_accl"`.
 - `target_temperature`: target temperature in °C, default 45.
-- `task_stack_depth`: stack depth of the sampling thread, default 512.
+- `task_stack_depth`: stack depth of the sampling thread in bytes, default 512.
 
 ## 4. Topic
 
